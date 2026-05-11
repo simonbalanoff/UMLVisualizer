@@ -2,54 +2,132 @@ package umlrenderer;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
-class UMLClass {
+public class UMLClass {
+    public enum Kind {
+        CLASS, ABSTRACT_CLASS, INTERFACE, ENUM
+    }
+
     private final String className;
-    private final List<String> methods;
-    private final List<String> fields;
+    private final Kind kind;
+    private final List<Member> fields = new ArrayList<>();
+    private final List<Member> methods = new ArrayList<>();
+
     private UMLClass parentClass;
-    private String parentClassName;
+    private String parentClassName = "";
+
     private final List<UMLClass> subclasses = new ArrayList<>();
+    private final List<UMLClass> implementedIfaces = new ArrayList<>();
+    private final List<String> unresolvedIfaces = new ArrayList<>();
 
-    private final boolean isAbstract;
+    public static class Member {
+        public enum Visibility {PUBLIC, PROTECTED, PACKAGE, PRIVATE}
 
-    public UMLClass(String className, List<String> methods, List<String> fields, boolean isAbstract) {
+        public final String name;
+        public final String type;
+        public final String params;
+        public final Visibility visibility;
+        public final boolean isStatic;
+        public final boolean isAbstract;
+        public final boolean isFinal;
+
+        public Member(String name, String type, String params,
+                      Visibility visibility,
+                      boolean isStatic, boolean isAbstract, boolean isFinal) {
+            this.name = name;
+            this.type = type;
+            this.params = params;
+            this.visibility = visibility;
+            this.isStatic = isStatic;
+            this.isAbstract = isAbstract;
+            this.isFinal = isFinal;
+        }
+
+        public String visibilitySymbol() {
+            return switch (visibility) {
+                case PUBLIC -> "+";
+                case PROTECTED -> "#";
+                case PACKAGE -> "~";
+                case PRIVATE -> "-";
+            };
+        }
+
+        public String label() {
+            String base = visibilitySymbol() + " " + name;
+            if (!params.isEmpty()) base += "(" + params + ") : " + type;
+            else base += " : " + type;
+            if (isStatic) base = "_" + base + "_";
+            if (isAbstract) base = "/" + base + "/";
+            return base;
+        }
+
+        public String displayLabel() {
+            return label().replace("_", "").replace("/", "");
+        }
+
+        public boolean isMethod() {
+            return !params.isEmpty() || type.equals("void");
+        }
+    }
+
+    public UMLClass(String className, Kind kind) {
         this.className = className;
-        this.methods = methods;
-        this.fields = fields;
-        this.isAbstract = isAbstract;
-
-        this.parentClassName = "";
+        this.kind = kind;
     }
 
-    public void addSubclass(UMLClass subclass) {
-        subclasses.add(subclass);
+    public void setParentClass(UMLClass parent) {
+        this.parentClass = parent;
+        this.parentClassName = parent.className;
+        parent.subclasses.add(this);
     }
 
-    public boolean isAbstract() {
-        return isAbstract;
+    public void setParentClassName(String name) {
+        this.parentClassName = name;
+    }
+
+    public void addImplementedIface(UMLClass iface) {
+        implementedIfaces.add(iface);
+    }
+
+    public void addUnresolvedIface(String name) {
+        unresolvedIfaces.add(name);
+    }
+
+    public void addField(Member m) {
+        fields.add(m);
+    }
+
+    public void addMethod(Member m) {
+        methods.add(m);
     }
 
     public String getClassName() {
         return className;
     }
 
-    public List<String> getMethods() {
-        return methods;
+    public Kind getKind() {
+        return kind;
     }
 
-    public List<String> getFields() {
+    public boolean isAbstract() {
+        return kind == Kind.ABSTRACT_CLASS;
+    }
+
+    public boolean isInterface() {
+        return kind == Kind.INTERFACE;
+    }
+
+    public boolean isEnum() {
+        return kind == Kind.ENUM;
+    }
+
+    public List<Member> getFields() {
         return fields;
     }
 
-    public void setParentClass(UMLClass parent) {
-        this.parentClass = parent;
-        this.parentClassName = parent.getClassName();
-        parent.subclasses.add(this);
-    }
-
-    public void setParentClassName(String parentClassName) {
-        this.parentClassName = parentClassName;
+    public List<Member> getMethods() {
+        return methods;
     }
 
     public UMLClass getParentClass() {
@@ -64,20 +142,44 @@ class UMLClass {
         return subclasses;
     }
 
+    public List<UMLClass> getImplementedIfaces() {
+        return implementedIfaces;
+    }
+
+    public List<String> getUnresolvedIfaces() {
+        return unresolvedIfaces;
+    }
+
+    public boolean isRoot() {
+        return parentClass == null;
+    }
+
+    public String stereotype() {
+        return switch (kind) {
+            case INTERFACE -> "«interface»";
+            case ABSTRACT_CLASS -> "«abstract»";
+            case ENUM -> "«enum»";
+            case CLASS -> "";
+        };
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof UMLClass uc)) return false;
+        return Objects.equals(className, uc.className);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(className);
+    }
+
     @Override
     public String toString() {
-        StringBuilder ret = new StringBuilder();
-        ret.append(className).append("\n");
-        if (!fields.isEmpty()) {
-            for (String field : fields) {
-                ret.append("\t").append(field).append("\n");
-            }
-        }
-        if(!methods.isEmpty()) {
-            for (String method : methods) {
-                ret.append("\t").append(method).append("\n");
-            }
-        }
-        return ret.toString();
+        StringBuilder sb = new StringBuilder(className).append("\n");
+        fields.forEach(f -> sb.append("  ").append(f.displayLabel()).append("\n"));
+        methods.forEach(m -> sb.append("  ").append(m.displayLabel()).append("\n"));
+        return sb.toString();
     }
 }
