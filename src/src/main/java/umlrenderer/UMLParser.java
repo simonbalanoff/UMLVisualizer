@@ -48,7 +48,7 @@ public class UMLParser {
     }
 
     UMLClass parseSource(String source) {
-        source = sanitise(source);
+        source = sanitize(source);
 
         Matcher m = TYPE_DECL.matcher(source);
         if (!m.find()) return null;
@@ -156,7 +156,7 @@ public class UMLParser {
         }
     }
 
-    private String sanitise(String src) {
+    private String sanitize(String src) {
         int n = src.length();
         StringBuilder sb = new StringBuilder(n);
         int i = 0;
