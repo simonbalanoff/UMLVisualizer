@@ -92,27 +92,27 @@ public class UMLVisualizer {
     }
 
     private static UMLLayout.NodeSizer defaultSizer() {
-        final double charW = 7.5;
-        final int PAD = 12;
-        final int HEADER_H = 44;
-        final int ROW_H = 18;
-
         return new UMLLayout.NodeSizer() {
             @Override
-            public int width(UMLClass c) {
-                int max = c.getClassName().length();
-                for (UMLClass.Member f : c.getFields())
-                    max = Math.max(max, f.displayLabel().length());
-                for (UMLClass.Member m : c.getMethods())
-                    max = Math.max(max, m.displayLabel().length());
-                return (int)(max * charW) + PAD * 2 + 20;
+            public int width(UMLClass type) {
+                int max = type.getClassName().length();
+                for (UMLClass.Member field : type.getFields()) {
+                    max = Math.max(max, field.displayLabel().length());
+                }
+                for (UMLClass.Member method : type.getMethods()) {
+                    max = Math.max(max, method.displayLabel().length());
+                }
+                return Math.max(215, Math.min(285, (int) (max * 7.3) + 36));
             }
 
             @Override
-            public int height(UMLClass c) {
-                int rows = c.getFields().size() + c.getMethods().size();
-                boolean hasBoth = !c.getFields().isEmpty() && !c.getMethods().isEmpty();
-                return HEADER_H + rows * ROW_H + (hasBoth ? ROW_H : 0) + PAD;
+            public int height(UMLClass type) {
+                int fields = Math.min(4, type.getFields().size());
+                int methods = Math.min(4, type.getMethods().size());
+                if (type.getFields().size() > fields) fields++;
+                if (type.getMethods().size() > methods) methods++;
+                boolean both = !type.getFields().isEmpty() && !type.getMethods().isEmpty();
+                return 44 + (fields + methods) * 18 + (both ? 18 : 0) + 12;
             }
         };
     }
