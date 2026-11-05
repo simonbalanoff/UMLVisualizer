@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "org.balanoff"
-version = "0.2.0-SNAPSHOT"
+version = "2.1.0"
 
 repositories {
     mavenCentral()

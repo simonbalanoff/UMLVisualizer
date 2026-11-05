@@ -11,7 +11,7 @@ import java.nio.file.Path;
 import java.util.concurrent.Callable;
 
 @Command(name = "umlvisualizer", mixinStandardHelpOptions = true,
-        version = "UMLVisualizer 0.2.0",
+        version = "UMLVisualizer 2.1.0",
         description = "Visualize the UML structure of a Java source directory.")
 public class UMLCli implements Callable<Integer> {
     @Parameters(index = "0", arity = "0..1", paramLabel = "SOURCE_DIRECTORY",
