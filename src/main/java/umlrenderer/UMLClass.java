@@ -79,7 +79,7 @@ public class UMLClass {
         }
 
         public String displayLabel() {
-            return label().replace("_", "").replace("/", "");
+            return visibilitySymbol() + " " + name + (method ? "(" + params + ") : " + type : " : " + type);
         }
 
         public boolean isMethod() {
