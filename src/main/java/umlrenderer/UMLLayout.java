@@ -152,6 +152,9 @@ public class UMLLayout {
                 if (seen.add(neighbor)) queue.addLast(neighbor);
             }
         }
+        group.stream().filter(type -> !seen.contains(type))
+                .sorted(Comparator.comparing(UMLClass::getQualifiedName))
+                .forEach(ordered::add);
         return ordered;
     }
 
