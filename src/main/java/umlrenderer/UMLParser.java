@@ -1,6 +1,9 @@
 package umlrenderer;
 
-import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.ParseProblemException;
+import com.github.javaparser.ParseResult;
+import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.body.*;
@@ -18,6 +21,8 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 public class UMLParser {
+    private final JavaParser javaParser = new JavaParser(
+            new ParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21));
     public List<UMLClass> parseDirectory(Path root) throws IOException {
         if (!Files.isDirectory(root)) {
             throw new IOException("Source directory does not exist: " + root);
@@ -50,7 +55,9 @@ public class UMLParser {
     }
 
     List<UMLClass> parseSources(String source) {
-        CompilationUnit unit = StaticJavaParser.parse(source);
+        ParseResult<CompilationUnit> parsed = javaParser.parse(source);
+        CompilationUnit unit = parsed.getResult()
+                .orElseThrow(() -> new ParseProblemException(parsed.getProblems()));
         String packageName = unit.getPackageDeclaration()
                 .map(declaration -> declaration.getNameAsString())
                 .orElse("");
