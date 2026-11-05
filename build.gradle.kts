@@ -21,13 +21,17 @@ dependencies {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(21)
     }
     withSourcesJar()
 }
 
 application {
     mainClass = "umlrenderer.UMLCli"
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.release = 17
 }
 
 tasks.test {
