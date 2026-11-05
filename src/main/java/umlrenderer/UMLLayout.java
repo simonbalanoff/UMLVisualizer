@@ -2,196 +2,179 @@ package umlrenderer;
 
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class UMLLayout {
-    // Horizontal gap between sibling nodes on the same layer.
-    public static final int H_GAP = 60;
-    // Vertical gap between layers.
-    public static final int V_GAP = 80;
-    // Minimum node width.
-    public static final int MIN_W = 160;
-    // Left/top canvas margin.
-    public static final int MARGIN = 40;
+    public static final int H_GAP = 120;
+    public static final int V_GAP = 130;
+    public static final int MIN_W = 205;
+    public static final int MARGIN = 70;
 
-    public Map<UMLClass, Rectangle2D> layout(
-            List<UMLClass> classes,
-            NodeSizer sizer) {
+    public Map<UMLClass, Rectangle2D> layout(List<UMLClass> classes, NodeSizer sizer) {
+        if (classes.isEmpty()) return Map.of();
 
-        if (classes.isEmpty()) return Collections.emptyMap();
-
-        Map<UMLClass, Integer> layer = assignLayers(classes);
-
-        int maxLayer = layer.values().stream().mapToInt(i -> i).max().orElse(0);
-        List<List<UMLClass>> layers = new ArrayList<>();
-        for (int i = 0; i <= maxLayer; i++) layers.add(new ArrayList<>());
-        for (UMLClass c : classes) layers.get(layer.get(c)).add(c);
-
-        sortLayers(layers, layer);
-
-        Map<UMLClass, Double> nodeH = new HashMap<>();
-        for (UMLClass c : classes) nodeH.put(c, (double) sizer.height(c));
-
-        Map<Integer, Double> layerY = new HashMap<>();
-        double y = MARGIN;
-        for (int i = 0; i <= maxLayer; i++) {
-            layerY.put(i, y);
-            double maxH = layers.get(i).stream()
-                    .mapToDouble(c -> nodeH.get(c)).max().orElse(0);
-            y += maxH + V_GAP;
+        Map<UMLClass, Set<UMLClass>> adjacency = new LinkedHashMap<>();
+        for (UMLClass type : classes) adjacency.put(type, new HashSet<>());
+        for (UMLRelationship relationship : UMLRelationships.analyze(classes)) {
+            adjacency.get(relationship.source()).add(relationship.target());
+            adjacency.get(relationship.target()).add(relationship.source());
         }
 
-        Map<UMLClass, Double> nodeW = new HashMap<>();
-        for (UMLClass c : classes) nodeW.put(c, (double) Math.max(MIN_W, sizer.width(c)));
+        List<List<UMLClass>> groups = connectedComponents(classes, adjacency);
+        groups.sort(Comparator.<List<UMLClass>>comparingInt(List::size).reversed()
+                .thenComparing(group -> group.get(0).getQualifiedName()));
 
-        Map<UMLClass, Double> xPos = assignX(layers, nodeW);
+        List<UMLClass> isolated = new ArrayList<>();
+        groups.removeIf(group -> {
+            if (group.size() == 1) {
+                isolated.add(group.get(0));
+                return true;
+            }
+            return false;
+        });
+        if (!isolated.isEmpty()) {
+            isolated.sort(Comparator.comparing(UMLClass::getQualifiedName));
+            groups.add(isolated);
+        }
 
         Map<UMLClass, Rectangle2D> bounds = new LinkedHashMap<>();
-        for (UMLClass c : classes) {
-            double cx = xPos.getOrDefault(c, (double) MARGIN);
-            double cy = layerY.get(layer.get(c));
-            double w = nodeW.get(c);
-            double h = nodeH.get(c);
-            bounds.put(c, new Rectangle2D.Double(cx, cy, w, h));
+        double cursorX = MARGIN;
+        double cursorY = MARGIN;
+        double bandHeight = 0;
+        double maxRowWidth = 1550;
+
+        for (List<UMLClass> group : groups) {
+            List<UMLClass> ordered = orderByConnections(group, adjacency);
+            int columns = Math.min(4, Math.max(1, (int) Math.ceil(Math.sqrt(ordered.size() * 1.25))));
+            int rows = (ordered.size() + columns - 1) / columns;
+            double[] widths = new double[columns];
+            double[] heights = new double[rows];
+
+            for (int index = 0; index < ordered.size(); index++) {
+                UMLClass type = ordered.get(index);
+                int column = index % columns;
+                int row = index / columns;
+                widths[column] = Math.max(widths[column], Math.max(MIN_W, sizer.width(type)));
+                heights[row] = Math.max(heights[row], sizer.height(type));
+            }
+
+            double groupWidth = (columns - 1) * H_GAP;
+            for (double width : widths) groupWidth += width;
+            double groupHeight = (rows - 1) * V_GAP;
+            for (double height : heights) groupHeight += height;
+
+            if (cursorX > MARGIN && cursorX + groupWidth > maxRowWidth) {
+                cursorX = MARGIN;
+                cursorY += bandHeight + V_GAP * 1.2;
+                bandHeight = 0;
+            }
+
+            double[] lefts = new double[columns];
+            double[] tops = new double[rows];
+            double x = cursorX;
+            for (int i = 0; i < columns; i++) {
+                lefts[i] = x;
+                x += widths[i] + H_GAP;
+            }
+            double y = cursorY;
+            for (int i = 0; i < rows; i++) {
+                tops[i] = y;
+                y += heights[i] + V_GAP;
+            }
+
+            for (int index = 0; index < ordered.size(); index++) {
+                UMLClass type = ordered.get(index);
+                int column = index % columns;
+                int row = index / columns;
+                double width = Math.max(MIN_W, sizer.width(type));
+                bounds.put(type, new Rectangle2D.Double(
+                        lefts[column] + (widths[column] - width) / 2,
+                        tops[row], width, sizer.height(type)));
+            }
+
+            cursorX += groupWidth + H_GAP * 1.3;
+            bandHeight = Math.max(bandHeight, groupHeight);
         }
 
         return bounds;
     }
 
-    private Map<UMLClass, Integer> assignLayers(List<UMLClass> classes) {
-        Map<UMLClass, Integer> layer = new HashMap<>();
-
-        Queue<UMLClass> queue = new ArrayDeque<>();
-        for (UMLClass c : classes) {
-            if (c.isRoot()) {
-                layer.put(c, 0);
-                queue.add(c);
+    private List<List<UMLClass>> connectedComponents(
+            List<UMLClass> classes, Map<UMLClass, Set<UMLClass>> adjacency) {
+        List<List<UMLClass>> components = new ArrayList<>();
+        Set<UMLClass> seen = new HashSet<>();
+        for (UMLClass start : classes) {
+            if (!seen.add(start)) continue;
+            List<UMLClass> component = new ArrayList<>();
+            ArrayDeque<UMLClass> queue = new ArrayDeque<>();
+            queue.add(start);
+            while (!queue.isEmpty()) {
+                UMLClass current = queue.removeFirst();
+                component.add(current);
+                List<UMLClass> neighbors = new ArrayList<>(adjacency.get(current));
+                neighbors.sort(Comparator.comparing(UMLClass::getQualifiedName));
+                for (UMLClass neighbor : neighbors) {
+                    if (seen.add(neighbor)) queue.addLast(neighbor);
+                }
             }
+            components.add(component);
         }
+        return components;
+    }
 
-        for (UMLClass c : classes) {
-            if (!layer.containsKey(c)) {
-                layer.put(c, 0);
-                queue.add(c);
-            }
-        }
-
+    private List<UMLClass> orderByConnections(
+            List<UMLClass> group, Map<UMLClass, Set<UMLClass>> adjacency) {
+        UMLClass root = group.stream().min(Comparator
+                .<UMLClass>comparingInt(type -> -adjacency.get(type).size())
+                .thenComparing(UMLClass::getQualifiedName)).orElseThrow();
+        List<UMLClass> ordered = new ArrayList<>();
+        Set<UMLClass> seen = new HashSet<>();
+        ArrayDeque<UMLClass> queue = new ArrayDeque<>();
+        queue.add(root);
+        seen.add(root);
         while (!queue.isEmpty()) {
-            UMLClass cur = queue.poll();
-            int childLayer = layer.get(cur) + 1;
-            for (UMLClass sub : cur.getSubclasses()) {
-                if (!layer.containsKey(sub) || layer.get(sub) < childLayer) {
-                    layer.put(sub, childLayer);
-                    queue.add(sub);
-                }
+            UMLClass current = queue.removeFirst();
+            ordered.add(current);
+            List<UMLClass> neighbors = new ArrayList<>(adjacency.get(current));
+            neighbors.sort(Comparator.<UMLClass>comparingInt(type -> -adjacency.get(type).size())
+                    .thenComparing(UMLClass::getQualifiedName));
+            for (UMLClass neighbor : neighbors) {
+                if (seen.add(neighbor)) queue.addLast(neighbor);
             }
         }
-
-        return layer;
-    }
-
-    private void sortLayers(List<List<UMLClass>> layers, Map<UMLClass, Integer> layerMap) {
-        for (int i = 1; i < layers.size(); i++) {
-            List<UMLClass> prev = layers.get(i - 1);
-            Map<UMLClass, Integer> prevPos = new HashMap<>();
-            for (int j = 0; j < prev.size(); j++) prevPos.put(prev.get(j), j);
-
-            layers.get(i).sort((a, b) -> {
-                double ba = barycentre(a, prevPos);
-                double bb = barycentre(b, prevPos);
-                return Double.compare(ba, bb);
-            });
-        }
-    }
-
-    private double barycentre(UMLClass node, Map<UMLClass, Integer> parentPositions) {
-        UMLClass p = node.getParentClass();
-        if (p == null) return Double.MAX_VALUE;
-        Integer pos = parentPositions.get(p);
-        return pos == null ? Double.MAX_VALUE : pos;
-    }
-
-    private Map<UMLClass, Double> assignX(
-            List<List<UMLClass>> layers,
-            Map<UMLClass, Double> nodeW) {
-
-        Map<UMLClass, Double> x = new HashMap<>();
-
-        Map<UMLClass, Double> subtreeW = new HashMap<>();
-        for (int i = layers.size() - 1; i >= 0; i--) {
-            for (UMLClass node : layers.get(i)) {
-                List<UMLClass> children = node.getSubclasses();
-                if (children.isEmpty()) {
-                    subtreeW.put(node, nodeW.get(node));
-                } else {
-                    double span = children.stream()
-                            .mapToDouble(c -> subtreeW.getOrDefault(c, nodeW.get(c)) + H_GAP)
-                            .sum() - H_GAP;
-                    subtreeW.put(node, Math.max(nodeW.get(node), span));
-                }
-            }
-        }
-
-        double cursor = MARGIN;
-        for (UMLClass root : layers.get(0)) {
-            placeSubtree(root, cursor, x, nodeW, subtreeW);
-            cursor += subtreeW.get(root) + H_GAP;
-        }
-
-        return x;
-    }
-
-    private void placeSubtree(
-            UMLClass node,
-            double left,
-            Map<UMLClass, Double> x,
-            Map<UMLClass, Double> nodeW,
-            Map<UMLClass, Double> subtreeW) {
-
-        double span = subtreeW.get(node);
-        double w = nodeW.get(node);
-        x.put(node, left + (span - w) / 2.0);
-
-        List<UMLClass> children = node.getSubclasses();
-        if (children.isEmpty()) return;
-
-        double childCursor = left;
-        for (UMLClass child : children) {
-            placeSubtree(child, childCursor, x, nodeW, subtreeW);
-            childCursor += subtreeW.getOrDefault(child, nodeW.get(child)) + H_GAP;
-        }
+        return ordered;
     }
 
     @FunctionalInterface
     public interface NodeSizer {
-        int width(UMLClass c);
+        int width(UMLClass type);
 
-        default int height(UMLClass c) {
-            int rows = 2 + c.getFields().size() + c.getMethods().size();
-            return rows * 18 + 28; // 18px per row, 28px header
+        default int height(UMLClass type) {
+            return 56 + Math.min(type.getFields().size(), 4) * 18
+                    + Math.min(type.getMethods().size(), 4) * 18 + 22;
         }
     }
 
     public static Point2D[] inheritanceEndpoints(Rectangle2D parent, Rectangle2D child) {
-        double px = parent.getCenterX();
-        double py = parent.getMaxY();
-        double cx = child.getCenterX();
-        double cy = child.getMinY();
         return new Point2D[]{
-                new Point2D.Double(px, py),
-                new Point2D.Double(cx, cy)
+                new Point2D.Double(parent.getCenterX(), parent.getMaxY()),
+                new Point2D.Double(child.getCenterX(), child.getMinY())
         };
     }
 
     public static Point2D[] implementsEndpoints(Rectangle2D iface, Rectangle2D impl) {
-        boolean ifaceLeft = iface.getCenterX() < impl.getCenterX();
-        double ix = ifaceLeft ? iface.getMaxX() : iface.getMinX();
-        double iy = iface.getCenterY();
-        double cx = ifaceLeft ? impl.getMinX() : impl.getMaxX();
-        double cy = impl.getCenterY();
+        boolean left = iface.getCenterX() < impl.getCenterX();
         return new Point2D[]{
-                new Point2D.Double(ix, iy),
-                new Point2D.Double(cx, cy)
+                new Point2D.Double(left ? iface.getMaxX() : iface.getMinX(), iface.getCenterY()),
+                new Point2D.Double(left ? impl.getMinX() : impl.getMaxX(), impl.getCenterY())
         };
     }
 }
