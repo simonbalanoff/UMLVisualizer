@@ -6,7 +6,7 @@ Uses **JavaParser** for AST-based source analysis, **Java2D/Swing** for an inter
 
 ## UML relationships
 
-The diagram renders solid inheritance lines with hollow triangle heads, dashed interface realization lines with hollow triangles, and solid field-association connectors. Orthogonal edge routing places connectors at class boundaries rather than joining class centers. Clicking a class highlights its direct relationships and dims unrelated types. Field associations are inferred from types declared within the scanned source tree, including generic type arguments such as `List<Customer>`.
+The diagram renders solid inheritance lines with hollow triangle heads, dashed interface realization lines with hollow triangles, and solid field-association connectors. Curved Bézier connections attach to the sides of class boxes rather than the center. The graph uses a two-dimensional, relationship-aware layout to keep connected classes near one another instead of placing all root types on a single horizontal row. Clicking a class highlights its direct relationships and dims unrelated types. Field associations are inferred from types declared within the scanned source tree, including generic type arguments such as `List<Customer>`.
 
 Relationship detection is intentionally conservative: unresolved or ambiguous type names do not create inferred edges. Aggregation, composition, and obstacle-aware multi-edge routing are future work.
 
@@ -91,11 +91,13 @@ Closing the viewer will not terminate the host application's JVM.
 
 - `src/main/java/umlrenderer/UMLParser.java`: AST-based source parsing
 - `src/main/java/umlrenderer/UMLClass.java`: UML types, members, and relationships
-- `src/main/java/umlrenderer/UMLLayout.java`: hierarchy-based layout algorithm
-- `src/main/java/umlrenderer/UMLRenderer.java`: interactive Java2D/Swing visualization
+- `src/main/java/umlrenderer/UMLLayout.java`: clustered two-dimensional graph layout
+- `src/main/java/umlrenderer/UMLRenderer.java`: curved-edge Java2D/Swing visualization
+- `src/main/java/umlrenderer/UMLRelationships.java`: relationship extraction
+- `src/main/java/umlrenderer/UMLRelationship.java`: typed graph edges
 - `src/main/java/umlrenderer/UMLVisualizer.java`: embeddable API
 - `src/main/java/umlrenderer/UMLCli.java`: Picocli entry point
 
 ## Current limitations
 
-Complete Java symbol resolution and import-aware relationship resolution are not implemented. Associations, aggregation, and composition are not yet inferred. The layout is optimized for inheritance relationships.
+Complete Java symbol resolution and import-aware relationship resolution are not implemented. Field associations are inferred, but aggregation and composition are not yet inferred. The layout clusters related classes but does not yet guarantee zero edge crossings or route every connection around intervening nodes. Large class boxes show a small selection of fields and methods; the inspector retains the complete list.
