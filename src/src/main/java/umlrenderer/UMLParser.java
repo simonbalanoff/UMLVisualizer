@@ -2,6 +2,7 @@ package umlrenderer;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.body.*;
 import com.github.javaparser.ast.nodeTypes.NodeWithModifiers;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
@@ -157,9 +158,9 @@ public class UMLParser {
 
     private UMLClass.Member.Visibility visibility(BodyDeclaration<?> member) {
         if (member instanceof NodeWithModifiers<?> modifiers) {
-            if (modifiers.isPublic()) return UMLClass.Member.Visibility.PUBLIC;
-            if (modifiers.isProtected()) return UMLClass.Member.Visibility.PROTECTED;
-            if (modifiers.isPrivate()) return UMLClass.Member.Visibility.PRIVATE;
+            if (modifiers.hasModifier(Modifier.Keyword.PUBLIC)) return UMLClass.Member.Visibility.PUBLIC;
+            if (modifiers.hasModifier(Modifier.Keyword.PROTECTED)) return UMLClass.Member.Visibility.PROTECTED;
+            if (modifiers.hasModifier(Modifier.Keyword.PRIVATE)) return UMLClass.Member.Visibility.PRIVATE;
         }
         return UMLClass.Member.Visibility.PACKAGE;
     }
