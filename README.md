@@ -4,6 +4,12 @@ A Java-only UML class diagram explorer for source projects. Run it from the comm
 
 Uses **JavaParser** for AST-based source analysis, **Java2D/Swing** for an interactive desktop viewer, and **Gradle Kotlin DSL** for builds.
 
+## UML relationships
+
+The diagram renders solid inheritance lines with hollow triangle heads, dashed interface realization lines with hollow triangles, and solid field-association connectors. Orthogonal edge routing places connectors at class boundaries rather than joining class centers. Clicking a class highlights its direct relationships and dims unrelated types. Field associations are inferred from types declared within the scanned source tree, including generic type arguments such as `List<Customer>`.
+
+Relationship detection is intentionally conservative: unresolved or ambiguous type names do not create inferred edges. Aggregation, composition, and obstacle-aware multi-edge routing are future work.
+
 ## Requirements
 
 JDK 17 or newer. Gradle is not required: use the checked-in wrapper.
