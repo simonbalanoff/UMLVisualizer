@@ -1,93 +1,95 @@
 # UMLVisualizer
 
-A Java-only UML class diagram visualizer for Java source projects. Run a standalone JAR against a directory, or open the diagram from another Java program.
+A Java-only UML class diagram explorer for source projects. Run it from the command line as a standalone JAR or invoke it inside another Java program.
 
-UMLVisualizer uses JavaParser to analyze Java source code without compiling or executing it. The desktop viewer uses Java2D and Swing, with zooming, panning, a minimap, and a class inspector.
+Uses **JavaParser** for AST-based source analysis, **Java2D/Swing** for an interactive desktop viewer, and **Gradle Kotlin DSL** for builds.
+
+## Requirements
+
+JDK 17 or newer. Gradle is not required: use the checked-in wrapper.
 
 ## Build
 
-Requires JDK 17+ and Maven.
+```bash
+./gradlew clean build
+```
+
+The standalone executable is `build/libs/umlvisualizer-all.jar`.
+
+## Run
+
+Analyze a source directory and open the desktop diagram:
 
 ```bash
-mvn -f src/pom.xml clean verify
+java -jar build/libs/umlvisualizer-all.jar path/to/project/src/main/java
 ```
 
-The executable JAR is generated at:
-
-```text
-src/target/umlvisualizer-0.2.0-SNAPSHOT.jar
-```
-
-## Run from the command line
+Analyze the current directory:
 
 ```bash
-java -jar src/target/umlvisualizer-0.2.0-SNAPSHOT.jar path/to/project/src/main/java
+./gradlew run
 ```
 
-To analyze the current directory:
+Print a headless summary:
 
 ```bash
-java -jar src/target/umlvisualizer-0.2.0-SNAPSHOT.jar
+java -jar build/libs/umlvisualizer-all.jar --summary path/to/project
 ```
 
-To print a list of discovered types without opening the GUI:
+Show CLI options:
 
 ```bash
-java -jar src/target/umlvisualizer-0.2.0-SNAPSHOT.jar --summary path/to/project
+java -jar build/libs/umlvisualizer-all.jar --help
 ```
 
-Use `--help` for options.
+## Embed in a Java application
 
-## Run from another Java project
-
-Add the built JAR to the application's classpath and call:
+Include `umlvisualizer-all.jar` in your classpath and call:
 
 ```java
 import java.nio.file.Path;
 import umlrenderer.UMLVisualizer;
 
-public class Example {
+public class Main {
     public static void main(String[] args) {
         UMLVisualizer.initFrom(Path.of("src/main/java"));
     }
 }
 ```
 
-Closing the diagram window does not terminate the host application.
+Closing the viewer will not terminate the host application's JVM.
 
 ## Viewer controls
 
 | Action | Control |
 | --- | --- |
-| Pan | Drag on canvas |
+| Pan | Drag canvas |
 | Zoom | Mouse wheel |
 | Fit all | F |
 | Reset zoom | R |
-| Select class | Click node |
+| Select a class | Click its node |
 | Deselect | Esc |
 | Zoom in/out | + / - |
 
+## Development commands
+
+| Task | Command |
+| --- | --- |
+| Run tests | `./gradlew test` |
+| Build and test | `./gradlew build` |
+| Create standalone JAR | `./gradlew shadowJar` |
+| Run CLI | `./gradlew run --args="--summary ."` |
+| Clean | `./gradlew clean` |
+
 ## Architecture
 
-- `UMLParser`: AST-based parsing using JavaParser
-- `UMLClass`: diagram model for types and members
-- `UMLLayout`: layered, inheritance-oriented layout
-- `UMLRenderer`: interactive Java2D/Swing viewer
-- `UMLVisualizer`: embeddable Java API
-- `UMLCli`: standalone CLI
+- `src/main/java/umlrenderer/UMLParser.java`: AST-based source parsing
+- `src/main/java/umlrenderer/UMLClass.java`: UML types, members, and relationships
+- `src/main/java/umlrenderer/UMLLayout.java`: hierarchy-based layout algorithm
+- `src/main/java/umlrenderer/UMLRenderer.java`: interactive Java2D/Swing visualization
+- `src/main/java/umlrenderer/UMLVisualizer.java`: embeddable API
+- `src/main/java/umlrenderer/UMLCli.java`: Picocli entry point
 
-## Current scope
+## Current limitations
 
-The parser handles multiple top-level and nested class/interface/enum declarations, record declarations as class-like types, fields, methods, and constructors. It resolves inheritance and interfaces when it can identify the target in the parsed source tree.
-
-It does not yet provide complete symbol resolution, associations/composition, or reliable cross-package import resolution. Its layout is optimized for inheritance and may be crowded for complex projects.
-
-## Development
-
-Run tests:
-
-```bash
-mvn -f src/pom.xml test
-```
-
-The Java-only desktop rewrite is on `refactor/java-desktop`. The original application remains on `main`.
+Complete Java symbol resolution and import-aware relationship resolution are not implemented. Associations, aggregation, and composition are not yet inferred. The layout is optimized for inheritance relationships.
