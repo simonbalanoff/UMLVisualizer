@@ -341,13 +341,12 @@ public class UMLRenderer {
         }
 
         private void drawEdges(Graphics2D g2) {
-            for (int index = 0; index < relationships.size(); index++) {
-                UMLRelationship relationship = relationships.get(index);
+            for (UMLRelationship relationship : relationships) {
                 Rectangle2D source = bounds.get(relationship.source());
                 Rectangle2D target = bounds.get(relationship.target());
                 if (source == null || target == null) continue;
 
-                CurvedEdge curve = curveBetween(source, target, index);
+                List<Point2D> points = UMLEdgeRouter.route(source, target);
                 Color color = switch (relationship.type()) {
                     case EXTENDS -> ARROW_INHERIT;
                     case IMPLEMENTS -> ARROW_IMPL;
@@ -366,50 +365,20 @@ public class UMLRenderer {
                             : new BasicStroke(focused ? 1.65f : 1.2f,
                                     BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                     Path2D path = new Path2D.Double();
-                    path.moveTo(curve.start().getX(), curve.start().getY());
-                    path.curveTo(curve.controlA().getX(), curve.controlA().getY(),
-                            curve.controlB().getX(), curve.controlB().getY(),
-                            curve.end().getX(), curve.end().getY());
+                    path.moveTo(points.get(0).getX(), points.get(0).getY());
+                    for (int i = 1; i < points.size(); i++) {
+                        path.lineTo(points.get(i).getX(), points.get(i).getY());
+                    }
                     edge.draw(path);
 
                     if (relationship.type() != UMLRelationship.Type.ASSOCIATION) {
-                        drawHollowTriangle(edge, curve.controlB(), curve.end(), color);
+                        drawHollowTriangle(edge, points.get(points.size() - 2),
+                                points.get(points.size() - 1), color);
                     }
                 } finally {
                     edge.dispose();
                 }
             }
-        }
-
-        private record CurvedEdge(Point2D start, Point2D controlA, Point2D controlB, Point2D end) {}
-
-        private CurvedEdge curveBetween(Rectangle2D source, Rectangle2D target, int index) {
-            double dx = target.getCenterX() - source.getCenterX();
-            double dy = target.getCenterY() - source.getCenterY();
-            double separation = Math.min(150, Math.max(55, Math.hypot(dx, dy) * 0.32));
-            double lane = ((index % 5) - 2) * 13.0;
-
-            if (Math.abs(dx) >= Math.abs(dy)) {
-                int direction = dx >= 0 ? 1 : -1;
-                Point2D start = new Point2D.Double(
-                        direction > 0 ? source.getMaxX() : source.getMinX(), source.getCenterY());
-                Point2D end = new Point2D.Double(
-                        direction > 0 ? target.getMinX() : target.getMaxX(), target.getCenterY());
-                return new CurvedEdge(start,
-                        new Point2D.Double(start.getX() + direction * separation, start.getY() + lane),
-                        new Point2D.Double(end.getX() - direction * separation, end.getY() + lane),
-                        end);
-            }
-
-            int direction = dy >= 0 ? 1 : -1;
-            Point2D start = new Point2D.Double(source.getCenterX(),
-                    direction > 0 ? source.getMaxY() : source.getMinY());
-            Point2D end = new Point2D.Double(target.getCenterX(),
-                    direction > 0 ? target.getMinY() : target.getMaxY());
-            return new CurvedEdge(start,
-                    new Point2D.Double(start.getX() + lane, start.getY() + direction * separation),
-                    new Point2D.Double(end.getX() + lane, end.getY() - direction * separation),
-                    end);
         }
 
         private void drawHollowTriangle(Graphics2D g2, Point2D previous, Point2D tip, Color color) {

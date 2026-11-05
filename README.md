@@ -1,56 +1,96 @@
 # UMLVisualizer
 
-A Java-only UML class diagram explorer for source projects. Run it from the command line as a standalone JAR or invoke it inside another Java program.
+Explore the structure of a Java codebase as an interactive UML class diagram. Point UMLVisualizer at a source directory to see its types, inheritance, interfaces, and field relationships, then select a type to inspect its members and connections.
 
-Uses **JavaParser** for AST-based source analysis, **Java2D/Swing** for an interactive desktop viewer, and **Gradle Kotlin DSL** for builds.
+UMLVisualizer is a Java desktop application built with JavaParser, Java2D/Swing, and Picocli. Run it as a standalone JAR, use the CLI for a text summary, or open the viewer from another Java application.
 
-## UML relationships
+## Features
 
-The diagram renders solid inheritance lines with hollow triangle heads, dashed interface realization lines with hollow triangles, and solid field-association connectors. Curved Bézier connections attach to the sides of class boxes rather than the center. The graph uses a two-dimensional, relationship-aware layout to keep connected classes near one another instead of placing all root types on a single horizontal row. Clicking a class highlights its direct relationships and dims unrelated types. Field associations are inferred from types declared within the scanned source tree, including generic type arguments such as `List<Customer>`.
+- Recursively scans `.java` files without compiling the project being analyzed.
+- Parses classes, abstract classes, interfaces, enums, records, and nested type declarations. Records currently appear as classes.
+- Displays declared fields, methods, and constructors with visibility and static/abstract styling.
+- Groups related types in a two-dimensional layout.
+- Connects boxes with straight segments and right-angle bends; aligned boxes use a single straight line.
+- Highlights a selected type's direct relationships and dims unrelated types.
+- Provides pan, zoom, fit-to-view, a minimap, and a member inspector. Boxes preview up to four fields and four methods; the inspector shows the full parsed member list.
 
-Relationship detection is intentionally conservative: unresolved or ambiguous type names do not create inferred edges. Aggregation, composition, and obstacle-aware multi-edge routing are future work.
+## Quick start
 
-## Requirements
-
-JDK 17 or newer. Gradle is not required: use the checked-in wrapper.
-
-## Build
-
-```bash
-./gradlew clean build
-```
-
-The standalone executable is `build/libs/umlvisualizer-all.jar`.
-
-## Run
-
-Analyze a source directory and open the desktop diagram:
+Build with **JDK 21** using the included Gradle wrapper:
 
 ```bash
-java -jar build/libs/umlvisualizer-all.jar path/to/project/src/main/java
+./gradlew build
 ```
 
-Analyze the current directory:
+Then open a diagram of this project's source:
 
 ```bash
-./gradlew run
+java -jar build/libs/umlvisualizer-all.jar src/main/java
 ```
 
-Print a headless summary:
+Replace `src/main/java` with the source directory you want to explore. The standalone JAR includes its dependencies and runs on **Java 17 or newer**. Opening the viewer requires a graphical desktop; `--summary` also works in headless environments.
+
+On Windows, use `gradlew.bat` in place of `./gradlew`. A separate Gradle installation is not required. The first build needs network access to download Gradle and dependencies.
+
+## Command-line usage
+
+```text
+java -jar build/libs/umlvisualizer-all.jar [OPTIONS] [SOURCE_DIRECTORY]
+```
+
+The source directory defaults to the current working directory. All `.java` files below it are scanned, so choose a source folder to narrow the diagram to the code you care about.
+
+| Option | Behavior |
+| --- | --- |
+| `--summary` | Print the number of parsed types, then each type's kind and qualified name, without opening a window |
+| `-h`, `--help` | Show usage and available options |
+| `-V`, `--version` | Print the application version |
+
+Open another project's diagram:
 
 ```bash
-java -jar build/libs/umlvisualizer-all.jar --summary path/to/project
+java -jar build/libs/umlvisualizer-all.jar /path/to/project/src/main/java
 ```
 
-Show CLI options:
+Inspect a project without a desktop:
 
 ```bash
-java -jar build/libs/umlvisualizer-all.jar --help
+java -jar build/libs/umlvisualizer-all.jar --summary /path/to/project/src/main/java
 ```
+
+Run directly through Gradle:
+
+```bash
+./gradlew run --args="src/main/java"
+./gradlew run --args="--summary src/main/java"
+```
+
+The CLI returns `0` on success, `1` when no Java types are found, and `2` for an invalid directory or an attempt to open the viewer in a headless environment. Parsing failures are reported as errors.
+
+## Reading the diagram
+
+| Relationship | Appearance |
+| --- | --- |
+| Class inheritance (`extends`) | Solid blue line with a hollow triangle pointing to the parent |
+| Interface relationship (`implements` or interface `extends`) | Dashed green line with a hollow triangle pointing to the interface |
+| Field association | Solid gray connector without an arrowhead |
+
+Field associations connect types found in the scanned source tree, including generic arguments such as `List<Customer>`. Primitive types and unresolved references do not create connectors. Multiple fields referencing the same target produce one association per source/target pair.
+
+## Viewer controls
+
+| Action | Control |
+| --- | --- |
+| Pan | Drag the canvas |
+| Zoom | Mouse wheel or `+` / `-` |
+| Fit the diagram | `F` |
+| Reset zoom to 100% | `R` |
+| Inspect a type and highlight its connections | Click its box |
+| Clear selection | `Esc` or click empty canvas |
 
 ## Embed in a Java application
 
-Include `umlvisualizer-all.jar` in your classpath and call:
+Add `build/libs/umlvisualizer-all.jar` to your application's classpath and call `initFrom` with the source directory:
 
 ```java
 import java.nio.file.Path;
@@ -63,41 +103,40 @@ public class Main {
 }
 ```
 
-Closing the viewer will not terminate the host application's JVM.
+The viewer opens on Swing's event dispatch thread. Closing it does not terminate the host application. `UMLVisualizer.init()` also offers automatic source-directory discovery from the working directory; use `initFrom(Path)` to control the scan explicitly.
 
-## Viewer controls
+## Development
 
-| Action | Control |
-| --- | --- |
-| Pan | Drag canvas |
-| Zoom | Mouse wheel |
-| Fit all | F |
-| Reset zoom | R |
-| Select a class | Click its node |
-| Deselect | Esc |
-| Zoom in/out | + / - |
-
-## Development commands
+The build uses a JDK 21 toolchain and compiles with `--release 17`. Tests use JUnit 5.
 
 | Task | Command |
 | --- | --- |
 | Run tests | `./gradlew test` |
-| Build and test | `./gradlew build` |
-| Create standalone JAR | `./gradlew shadowJar` |
-| Run CLI | `./gradlew run --args="--summary ."` |
-| Clean | `./gradlew clean` |
+| Build, test, and package | `./gradlew build` |
+| Create the standalone JAR | `./gradlew shadowJar` |
+| Clean build outputs | `./gradlew clean` |
 
-## Architecture
+The main code lives in [`src/main/java/umlrenderer`](src/main/java/umlrenderer), with tests in [`src/test/java/umlrenderer`](src/test/java/umlrenderer).
 
-- `src/main/java/umlrenderer/UMLParser.java`: AST-based source parsing
-- `src/main/java/umlrenderer/UMLClass.java`: UML types, members, and relationships
-- `src/main/java/umlrenderer/UMLLayout.java`: clustered two-dimensional graph layout
-- `src/main/java/umlrenderer/UMLRenderer.java`: curved-edge Java2D/Swing visualization
-- `src/main/java/umlrenderer/UMLRelationships.java`: relationship extraction
-- `src/main/java/umlrenderer/UMLRelationship.java`: typed graph edges
-- `src/main/java/umlrenderer/UMLVisualizer.java`: embeddable API
-- `src/main/java/umlrenderer/UMLCli.java`: Picocli entry point
+| Component | Responsibility |
+| --- | --- |
+| `UMLParser` | Parse source declarations and resolve inheritance/interface references |
+| `UMLClass` | Store type and member information |
+| `UMLRelationships` / `UMLRelationship` | Infer and represent diagram connections |
+| `UMLLayout` | Position and size groups of related types |
+| `UMLEdgeRouter` | Route straight segments between box boundaries |
+| `UMLRenderer` | Draw the diagram and handle desktop interaction |
+| `UMLVisualizer` | Expose the embedded viewer API |
+| `UMLCli` | Handle command-line arguments and headless summaries |
 
-## Current limitations
+## Limitations
 
-Complete Java symbol resolution and import-aware relationship resolution are not implemented. Field associations are inferred, but aggregation and composition are not yet inferred. The layout clusters related classes but does not yet guarantee zero edge crossings or route every connection around intervening nodes. Large class boxes show a small selection of fields and methods; the inspector retains the complete list.
+- Relationship resolution uses names and source context, without full Java symbol resolution or import-aware lookup. Ambiguous or unresolved names may leave connections out, and external library types are not added to the diagram.
+- Records are displayed as classes; record components and compiler-generated members are not synthesized. Annotation declarations and local types inside method bodies are not modeled.
+- Associations are inferred from declared field types. Method calls, parameter dependencies, aggregation, composition, and multiplicities are not inferred.
+- Routing uses straight segments but does not avoid intervening boxes or guarantee separate lanes for overlapping connections. The layout does not guarantee zero crossings.
+- The viewer does not currently provide diagram export or live updates when source files change.
+
+## License
+
+[MIT](LICENSE)
