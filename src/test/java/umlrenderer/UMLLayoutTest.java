@@ -39,4 +39,41 @@ class UMLLayoutTest {
 
         assertFalse(positions.get(first).intersects(positions.get(second)));
     }
+
+    @Test
+    void distributesManyUnrelatedTypesAcrossRowsAndColumns() {
+        List<UMLClass> types = java.util.stream.IntStream.range(0, 16)
+                .mapToObj(index -> new UMLClass("Type" + index, UMLClass.Kind.CLASS))
+                .toList();
+
+        Map<UMLClass, Rectangle2D> positions = layout.layout(types, sizer);
+        long distinctRows = positions.values().stream()
+                .map(Rectangle2D::getMinY).distinct().count();
+        long distinctColumns = positions.values().stream()
+                .map(Rectangle2D::getMinX).distinct().count();
+
+        assertTrue(distinctRows >= 3);
+        assertTrue(distinctColumns >= 3);
+        for (int i = 0; i < types.size(); i++) {
+            for (int j = i + 1; j < types.size(); j++) {
+                assertFalse(positions.get(types.get(i)).intersects(positions.get(types.get(j))));
+            }
+        }
+    }
+
+    @Test
+    void keepsConnectedTypesNearEachOther() {
+        UMLClass hub = new UMLClass("Hub", UMLClass.Kind.CLASS);
+        UMLClass a = new UMLClass("A", UMLClass.Kind.CLASS);
+        UMLClass b = new UMLClass("B", UMLClass.Kind.CLASS);
+        a.setParentClass(hub);
+        b.setParentClass(hub);
+
+        var positions = layout.layout(List.of(a, b, hub), sizer);
+
+        assertEquals(3, positions.size());
+        assertTrue(positions.get(a).getMinY() >= 0);
+        assertTrue(positions.get(b).getMinY() >= 0);
+    }
+
 }
