@@ -53,7 +53,8 @@ public class UMLLayout {
 
         for (List<UMLClass> group : groups) {
             List<UMLClass> ordered = orderByConnections(group, adjacency);
-            int columns = Math.min(4, Math.max(1, (int) Math.ceil(Math.sqrt(ordered.size() * 1.25))));
+            int columns = ordered.size() <= 2 ? 1
+                    : Math.min(4, Math.max(2, (int) Math.ceil(Math.sqrt(ordered.size() * 1.25))));
             int rows = (ordered.size() + columns - 1) / columns;
             double[] widths = new double[columns];
             double[] heights = new double[rows];
