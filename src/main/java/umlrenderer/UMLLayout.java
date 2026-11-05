@@ -135,6 +135,7 @@ public class UMLLayout {
             List<UMLClass> group, Map<UMLClass, Set<UMLClass>> adjacency) {
         UMLClass root = group.stream().min(Comparator
                 .<UMLClass>comparingInt(type -> -adjacency.get(type).size())
+                .thenComparingInt(type -> type.getParentClass() == null ? 0 : 1)
                 .thenComparing(UMLClass::getQualifiedName)).orElseThrow();
         List<UMLClass> ordered = new ArrayList<>();
         Set<UMLClass> seen = new HashSet<>();
