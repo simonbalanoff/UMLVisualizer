@@ -112,4 +112,36 @@ class UMLParserTest {
         assertEquals("List<T>", type.getMethods().get(0).params);
     }
 
+
+    @Test
+    void parsesModernJavaSyntax() {
+        UMLClass result = parser.parseSource("""
+                class Modern {
+                    int describe(Object value) {
+                        if (value instanceof String text) {
+                            return switch (text) {
+                                case "one" -> 1;
+                                default -> 0;
+                            };
+                        }
+                        return -1;
+                    }
+                }
+                """);
+
+        assertNotNull(result);
+        assertEquals("Modern", result.getClassName());
+        assertEquals(1, result.getMethods().size());
+    }
+
+    @Test
+    void parsesItsOwnJavaSources() throws java.io.IOException {
+        var types = parser.parseDirectory(java.nio.file.Path.of("src/main/java"));
+
+        assertTrue(types.stream().anyMatch(type ->
+                type.getQualifiedName().equals("umlrenderer.UMLClass")));
+        assertTrue(types.stream().anyMatch(type ->
+                type.getQualifiedName().equals("umlrenderer.UMLParser")));
+    }
+
 }
