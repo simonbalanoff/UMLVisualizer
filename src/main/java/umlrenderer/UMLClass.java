@@ -10,6 +10,7 @@ public class UMLClass {
     }
 
     private final String className;
+    private String qualifiedName;
     private final Kind kind;
     private final List<Member> fields = new ArrayList<>();
     private final List<Member> methods = new ArrayList<>();
@@ -31,6 +32,7 @@ public class UMLClass {
         public final boolean isStatic;
         public final boolean isAbstract;
         public final boolean isFinal;
+        private final boolean method;
 
         public Member(String name, String type, String params,
                       Visibility visibility,
@@ -42,6 +44,20 @@ public class UMLClass {
             this.isStatic = isStatic;
             this.isAbstract = isAbstract;
             this.isFinal = isFinal;
+            this.method = !params.isEmpty() || type.equals("void");
+        }
+
+        public Member(String name, String type, String params,
+                      Visibility visibility, boolean isStatic, boolean isAbstract,
+                      boolean isFinal, boolean method) {
+            this.name = name;
+            this.type = type;
+            this.params = params;
+            this.visibility = visibility;
+            this.isStatic = isStatic;
+            this.isAbstract = isAbstract;
+            this.isFinal = isFinal;
+            this.method = method;
         }
 
         public String visibilitySymbol() {
@@ -55,7 +71,7 @@ public class UMLClass {
 
         public String label() {
             String base = visibilitySymbol() + " " + name;
-            if (!params.isEmpty()) base += "(" + params + ") : " + type;
+            if (method) base += "(" + params + ") : " + type;
             else base += " : " + type;
             if (isStatic) base = "_" + base + "_";
             if (isAbstract) base = "/" + base + "/";
@@ -63,16 +79,17 @@ public class UMLClass {
         }
 
         public String displayLabel() {
-            return label().replace("_", "").replace("/", "");
+            return visibilitySymbol() + " " + name + (method ? "(" + params + ") : " + type : " : " + type);
         }
 
         public boolean isMethod() {
-            return !params.isEmpty() || type.equals("void");
+            return method;
         }
     }
 
     public UMLClass(String className, Kind kind) {
         this.className = className;
+        this.qualifiedName = className;
         this.kind = kind;
     }
 
@@ -104,6 +121,14 @@ public class UMLClass {
 
     public String getClassName() {
         return className;
+    }
+
+    public void setQualifiedName(String name) {
+        this.qualifiedName = Objects.requireNonNull(name);
+    }
+
+    public String getQualifiedName() {
+        return qualifiedName;
     }
 
     public Kind getKind() {
@@ -167,12 +192,12 @@ public class UMLClass {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof UMLClass uc)) return false;
-        return Objects.equals(className, uc.className);
+        return Objects.equals(qualifiedName, uc.qualifiedName);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(className);
+        return Objects.hashCode(qualifiedName);
     }
 
     @Override

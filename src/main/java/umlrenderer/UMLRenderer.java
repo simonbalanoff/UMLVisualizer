@@ -81,10 +81,13 @@ public class UMLRenderer {
     private static final int MINI_H = 110;
     private static final int MINI_MARGIN = 12;
 
-    private static final double GRID_WORLD = 40.0;
+    private static final double GRID_WORLD = 72.0;
+    private static final int MAX_VISIBLE_FIELDS = 4;
+    private static final int MAX_VISIBLE_METHODS = 4;
 
     private final List<UMLClass> classes;
     private final Map<UMLClass, Rectangle2D> bounds;
+    private final List<UMLRelationship> relationships;
     private UMLClass selected = null;
 
     private double camX = 0, camY = 0;
@@ -105,13 +108,14 @@ public class UMLRenderer {
     public UMLRenderer(List<UMLClass> classes, Map<UMLClass, Rectangle2D> bounds) {
         this.classes = classes;
         this.bounds = bounds;
+        this.relationships = UMLRelationships.analyze(classes);
         buildUI();
         fitAll(false);
     }
 
     private void buildUI() {
         frame = new JFrame("UML Visualizer");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         frame.setSize(1280, 820);
         frame.setLocationRelativeTo(null);
         frame.getContentPane().setBackground(BG);
@@ -296,7 +300,18 @@ public class UMLRenderer {
 
             for (UMLClass c : classes) {
                 Rectangle2D r = bounds.get(c);
-                if (r != null) drawNode(g2, c, r);
+                if (r != null) {
+                    Graphics2D node = (Graphics2D) g2.create();
+                    try {
+                        if (selected != null && !c.equals(selected) && relationships.stream()
+                                .noneMatch(edge -> edge.touches(selected) && edge.touches(c))) {
+                            node.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.28f));
+                        }
+                        drawNode(node, c, r);
+                    } finally {
+                        node.dispose();
+                    }
+                }
             }
 
             g2.translate(-camX, -camY);
@@ -310,6 +325,7 @@ public class UMLRenderer {
             g2.setColor(GRID);
 
             double cellPx = GRID_WORLD * zoom;
+            if (cellPx < 22) return;
 
             double originX = (camX % GRID_WORLD) * zoom;
             double originY = (camY % GRID_WORLD) * zoom;
@@ -325,64 +341,66 @@ public class UMLRenderer {
         }
 
         private void drawEdges(Graphics2D g2) {
-            for (UMLClass c : classes) {
-                Rectangle2D childR = bounds.get(c);
-                if (childR == null) continue;
+            for (UMLRelationship relationship : relationships) {
+                Rectangle2D source = bounds.get(relationship.source());
+                Rectangle2D target = bounds.get(relationship.target());
+                if (source == null || target == null) continue;
 
-                if (c.getParentClass() != null) {
-                    Rectangle2D parentR = bounds.get(c.getParentClass());
-                    if (parentR != null) {
-                        Point2D[] pts = UMLLayout.inheritanceEndpoints(parentR, childR);
-                        drawInheritanceArrow(g2, pts[1], pts[0], ARROW_INHERIT);
-                    }
-                }
+                List<Point2D> points = UMLEdgeRouter.route(source, target);
+                Color color = switch (relationship.type()) {
+                    case EXTENDS -> ARROW_INHERIT;
+                    case IMPLEMENTS -> ARROW_IMPL;
+                    case ASSOCIATION -> new Color(0x7C8FA7);
+                };
 
-                for (UMLClass iface : c.getImplementedIfaces()) {
-                    Rectangle2D ifaceR = bounds.get(iface);
-                    if (ifaceR != null) {
-                        Point2D[] pts = UMLLayout.implementsEndpoints(ifaceR, childR);
-                        drawImplementsArrow(g2, pts[1], pts[0], ARROW_IMPL);
+                boolean focused = selected == null || relationship.touches(selected);
+                Graphics2D edge = (Graphics2D) g2.create();
+                try {
+                    edge.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER,
+                            focused ? 0.85f : 0.10f));
+                    edge.setColor(color);
+                    edge.setStroke(relationship.type() == UMLRelationship.Type.IMPLEMENTS
+                            ? new BasicStroke(1.65f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
+                                    10f, new float[]{7f, 6f}, 0f)
+                            : new BasicStroke(focused ? 1.65f : 1.2f,
+                                    BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                    Path2D path = new Path2D.Double();
+                    path.moveTo(points.get(0).getX(), points.get(0).getY());
+                    for (int i = 1; i < points.size(); i++) {
+                        path.lineTo(points.get(i).getX(), points.get(i).getY());
                     }
+                    edge.draw(path);
+
+                    if (relationship.type() != UMLRelationship.Type.ASSOCIATION) {
+                        drawHollowTriangle(edge, points.get(points.size() - 2),
+                                points.get(points.size() - 1), color);
+                    }
+                } finally {
+                    edge.dispose();
                 }
             }
         }
 
-        private void drawInheritanceArrow(Graphics2D g2, Point2D from, Point2D to, Color color) {
-            g2.setColor(color);
-            g2.setStroke(new BasicStroke(1.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2.drawLine((int) from.getX(), (int) from.getY(),
-                    (int) to.getX(), (int) to.getY());
-            drawHollowTriangle(g2, from, to, color, 10);
-        }
+        private void drawHollowTriangle(Graphics2D g2, Point2D previous, Point2D tip, Color color) {
+            double angle = Math.atan2(tip.getY() - previous.getY(), tip.getX() - previous.getX());
+            double length = 15;
+            double halfWidth = 6;
+            double baseX = tip.getX() - length * Math.cos(angle);
+            double baseY = tip.getY() - length * Math.sin(angle);
+            double nx = -Math.sin(angle) * halfWidth;
+            double ny = Math.cos(angle) * halfWidth;
 
-        private void drawImplementsArrow(Graphics2D g2, Point2D from, Point2D to, Color color) {
-            g2.setColor(color);
-            g2.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER,
-                    10f, new float[]{7, 5}, 0f));
-            g2.drawLine((int) from.getX(), (int) from.getY(),
-                    (int) to.getX(), (int) to.getY());
-            g2.setStroke(new BasicStroke(1.2f));
-            drawHollowTriangle(g2, from, to, color, 8);
-        }
+            Path2D triangle = new Path2D.Double();
+            triangle.moveTo(tip.getX(), tip.getY());
+            triangle.lineTo(baseX + nx, baseY + ny);
+            triangle.lineTo(baseX - nx, baseY - ny);
+            triangle.closePath();
 
-        private void drawHollowTriangle(Graphics2D g2, Point2D from, Point2D to, Color color, int size) {
-            double angle = Math.atan2(to.getY() - from.getY(), to.getX() - from.getX());
-            double spread = Math.PI / 6;
-            int[] xs = {
-                    (int) to.getX(),
-                    (int) (to.getX() - size * Math.cos(angle - spread)),
-                    (int) (to.getX() - size * Math.cos(angle + spread))
-            };
-            int[] ys = {
-                    (int) to.getY(),
-                    (int) (to.getY() - size * Math.sin(angle - spread)),
-                    (int) (to.getY() - size * Math.sin(angle + spread))
-            };
-            g2.setStroke(new BasicStroke(1.2f));
             g2.setColor(BG);
-            g2.fillPolygon(xs, ys, 3);
+            g2.fill(triangle);
             g2.setColor(color);
-            g2.drawPolygon(xs, ys, 3);
+            g2.setStroke(new BasicStroke(1.6f));
+            g2.draw(triangle);
         }
 
         private void drawNode(Graphics2D g2, UMLClass c, Rectangle2D r) {
@@ -445,20 +463,34 @@ public class UMLRenderer {
             g2.drawLine(x + 4, divY, x + w - 4, divY);
 
             int rowY = divY + ROW_H;
-            for (UMLClass.Member f : c.getFields()) {
-                drawMember(g2, f, x + PAD, rowY, w - PAD * 2);
+            for (int i = 0; i < Math.min(MAX_VISIBLE_FIELDS, c.getFields().size()); i++) {
+                drawMember(g2, c.getFields().get(i), x + PAD, rowY, w - PAD * 2);
+                rowY += ROW_H;
+            }
+            if (c.getFields().size() > MAX_VISIBLE_FIELDS) {
+                drawOverflow(g2, c.getFields().size() - MAX_VISIBLE_FIELDS, x + PAD, rowY);
                 rowY += ROW_H;
             }
 
             if (!c.getFields().isEmpty() && !c.getMethods().isEmpty()) {
                 g2.setColor(DIVIDER);
                 g2.drawLine(x + 4, rowY, x + w - 4, rowY);
-            }
-
-            for (UMLClass.Member m : c.getMethods()) {
-                drawMember(g2, m, x + PAD, rowY, w - PAD * 2);
                 rowY += ROW_H;
             }
+
+            for (int i = 0; i < Math.min(MAX_VISIBLE_METHODS, c.getMethods().size()); i++) {
+                drawMember(g2, c.getMethods().get(i), x + PAD, rowY, w - PAD * 2);
+                rowY += ROW_H;
+            }
+            if (c.getMethods().size() > MAX_VISIBLE_METHODS) {
+                drawOverflow(g2, c.getMethods().size() - MAX_VISIBLE_METHODS, x + PAD, rowY);
+            }
+        }
+
+        private void drawOverflow(Graphics2D g2, int remaining, int x, int y) {
+            g2.setFont(FONT_MEMBER);
+            g2.setColor(TXT_STEREO);
+            g2.drawString("+" + remaining + " more in inspector", x, y + 13);
         }
 
         private void drawMember(Graphics2D g2, UMLClass.Member m, int x, int y, int maxW) {
@@ -539,7 +571,7 @@ public class UMLRenderer {
         }
 
         private void drawHint(Graphics2D g2) {
-            String hint = "F fit  +/- zoom  Esc deselect";
+            String hint = "F fit  +/- zoom  Esc deselect  Click a class to focus relationships";
             g2.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 10));
             g2.setColor(new Color(255, 255, 255, 40));
             g2.drawString(hint, 12, getHeight() - 10);
