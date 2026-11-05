@@ -111,7 +111,7 @@ public class UMLRenderer {
 
     private void buildUI() {
         frame = new JFrame("UML Visualizer");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         frame.setSize(1280, 820);
         frame.setLocationRelativeTo(null);
         frame.getContentPane().setBackground(BG);
