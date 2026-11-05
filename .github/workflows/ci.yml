@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, refactor/foundation]
+    branches: [main, refactor/foundation, refactor/java-desktop]
   pull_request:
 
 jobs:
