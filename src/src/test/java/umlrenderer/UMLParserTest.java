@@ -62,4 +62,54 @@ class UMLParserTest {
         assertTrue(result.getUnresolvedIfaces().contains("Runnable"));
         assertTrue(result.getUnresolvedIfaces().contains("AutoCloseable"));
     }
+
+    @Test
+    void parsesMultipleTypesAndNestedDeclarations() {
+        String source = """
+                package example;
+                class First {
+                    class Inner {}
+                }
+                interface Second {}
+                """;
+
+        var types = parser.parseSources(source);
+
+        assertEquals(3, types.size());
+        assertEquals("example.First", types.get(0).getQualifiedName());
+        assertEquals("example.First.Inner", types.get(1).getQualifiedName());
+        assertEquals("example.Second", types.get(2).getQualifiedName());
+    }
+
+    @Test
+    void distinguishesFieldsFromZeroArgumentMethods() {
+        UMLClass type = parser.parseSource("""
+                class Example {
+                    int value;
+                    int getValue() { return value; }
+                    Example() {}
+                }
+                """);
+
+        assertNotNull(type);
+        assertFalse(type.getFields().get(0).isMethod());
+        assertEquals(2, type.getMethods().size());
+        assertTrue(type.getMethods().stream().allMatch(UMLClass.Member::isMethod));
+    }
+
+    @Test
+    void preservesGenericMemberTypesAndParameters() {
+        UMLClass type = parser.parseSource("""
+                import java.util.List;
+                class Box<T> {
+                    private List<T> values;
+                    public List<T> addAll(List<T> incoming) { return incoming; }
+                }
+                """);
+
+        assertNotNull(type);
+        assertEquals("List<T>", type.getFields().get(0).type);
+        assertEquals("List<T>", type.getMethods().get(0).params);
+    }
+
 }
